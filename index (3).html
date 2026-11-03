@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pubquiz - Domare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0f;
+    --surface: #15151c;
+    --surface-2: #1d1d27;
+    --border: #2a2a37;
+    --text: #f4f4f7;
+    --muted: #8b8b9a;
+    --accent: #c8f53c;       /* lime, används sparsamt */
+    --accent-ink: #0b0b0f;
+    --ok: #3ddc97;
+    --bad: #ff6b7a;
+    --radius: 14px;
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font-family: var(--font); font-size: 16px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 24px 18px 56px; }
+
+  header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 28px; }
+  h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+  h1 span { color: var(--accent); }
+  .tagline { font-family: var(--font); color: var(--accent); font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; margin: 0; }
+  .loser { outline: 2px solid var(--accent); animation: loserPulse 1s ease-in-out infinite; }
+  .loser-badge { display: inline-block; margin-left: 10px; background: var(--accent); color: #000; font-size: .75rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; vertical-align: middle; }
+  @keyframes loserPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(190, 242, 100, .6); } 50% { box-shadow: 0 0 0 10px rgba(190, 242, 100, 0); } }
+  @media (prefers-reduced-motion: reduce) { .loser { animation: none; } }
+
+  .screen { display: none; flex-direction: column; gap: 16px; }
+  .screen.active { display: flex; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .label {
+    display: block; font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin: 0 0 8px;
+  }
+  .title { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; margin: 0; line-height: 1.3; }
+  .question { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.25; margin: 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: .88rem; }
+  .counter { color: var(--muted); font-size: .88rem; margin: 12px 0 0; }
+  .error { color: var(--bad); min-height: 1.3em; font-size: .9rem; margin: 8px 0 0; }
+  .status { font-size: .92rem; color: var(--muted); margin: 12px 0 0; min-height: 1.3em; }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--bad); }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  input[type="text"] {
+    flex: 1; min-width: 0; font-family: var(--font); font-size: 1rem; color: var(--text);
+    padding: 12px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  }
+  input[type="text"]::placeholder { color: var(--muted); }
+  input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    font-family: var(--font); font-weight: 600; font-size: .98rem; cursor: pointer;
+    min-height: 48px; padding: 10px 18px; border-radius: 12px; border: 1px solid transparent;
+    background: var(--accent); color: var(--accent-ink);
+    transition: background .15s, border-color .15s, color .15s, transform .08s;
+  }
+  button:hover { filter: brightness(1.06); }
+  button:active { transform: scale(.98); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  button:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+  button.secondary { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+  button.secondary:hover { background: #262633; filter: none; }
+  button.ghost { background: transparent; color: var(--muted); min-height: 40px; padding: 6px 12px; font-size: .9rem; }
+  button.ghost:hover { color: var(--text); background: var(--surface-2); filter: none; }
+  button.block { width: 100%; }
+
+  /* Antal frågor */
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .seg button { background: var(--surface-2); color: var(--text); border-color: var(--border); font-size: 1.1rem; font-weight: 700; }
+  .seg button:hover { background: #262633; filter: none; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip {
+    display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px;
+    background: var(--surface-2); border-radius: 999px; font-size: .95rem; font-weight: 500;
+  }
+  .chip button {
+    min-height: 26px; width: 26px; padding: 0; border-radius: 50%;
+    background: transparent; color: var(--muted); font-size: 1.1rem; line-height: 1;
+  }
+  .chip button:hover { background: var(--border); color: var(--text); filter: none; }
+
+  .rules { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .rule { background: var(--surface-2); border-radius: 10px; padding: 12px 6px; text-align: center; }
+  .rule .n { display: block; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em; }
+  .rule .t { font-size: .8rem; color: var(--muted); }
+
+  .options { display: grid; gap: 8px; }
+  .option {
+    display: flex; gap: 14px; align-items: center; padding: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); font-size: 1.05rem; font-weight: 500;
+  }
+  .option .letter {
+    width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px; background: var(--surface-2);
+    display: grid; place-items: center; font-weight: 700; font-size: .85rem; color: var(--muted);
+  }
+  .option.correct { border-color: var(--ok); background: rgba(61, 220, 151, .08); }
+  .option.correct .letter { background: var(--ok); color: var(--accent-ink); }
+  .option.correct::after { content: "Rätt"; margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--ok); }
+
+  .players { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .player {
+    display: flex; flex-direction: column; gap: 2px; text-align: left; min-height: 84px; padding: 14px;
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius);
+    font-size: 1rem; font-weight: 600;
+  }
+  .player:hover:not(:disabled) { background: #262633; border-color: #3a3a4a; filter: none; }
+  .player:disabled { opacity: 1; cursor: default; }
+  .player:disabled:not(.won) { opacity: .4; }
+  .player.won { border-color: var(--accent); background: rgba(200, 245, 60, .08); }
+  .player .place { font-size: .78rem; font-weight: 700; color: var(--accent); min-height: 1.1em; }
+  .player .total { font-size: .85rem; font-weight: 500; color: var(--muted); }
+
+  .board { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .board li {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 12px 14px; background: var(--surface-2); border-radius: 10px; font-weight: 600;
+  }
+  .board .pts { color: var(--accent); font-weight: 800; white-space: nowrap; }
+
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; }
+  details summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+  details[open] summary { margin-bottom: 12px; color: var(--text); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Pub<span>quiz</span></h1>
+    <p class="tagline" id="headerInfo">Förloraren tar nästa runda</p>
+  </header>
+
+  <!-- INSTÄLLNINGAR -->
+  <section id="setup" class="screen active">
+    <div class="card">
+      <p class="label">Steg 1 · Deltagare</p>
+      <p class="title" style="margin-bottom:6px">Registrera spelarna</p>
+      <p class="muted small" style="margin:0 0 16px">Skriv namnet och tryck Enter. Individer eller lag.</p>
+      <div class="row">
+        <input id="nameInput" type="text" placeholder="Namn eller lagnamn" maxlength="30" aria-label="Namn">
+        <button id="addBtn" class="secondary">Lägg till</button>
+      </div>
+      <p class="error" id="setupError" role="alert"></p>
+      <div class="chips" id="chips"></div>
+      <p class="counter" id="counter"></p>
+    </div>
+
+    <div class="card">
+      <p class="label">Steg 2 · Antal frågor</p>
+      <div class="seg" id="countSeg">
+        <button type="button" data-n="5" aria-pressed="false">5</button>
+        <button type="button" data-n="10" aria-pressed="true">10</button>
+        <button type="button" data-n="15" aria-pressed="false">15</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Poäng</p>
+      <div class="rules">
+        <div class="rule"><span class="n">1 p</span><span class="t">Först med rätt svar</span></div>
+        <div class="rule"><span class="n">0 p</span><span class="t">Alla andra</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Frågelista</p>
+      <div class="row">
+        <button id="testBtn" class="secondary" style="flex:1">Testa frågelistan</button>
+      </div>
+      <p class="status" id="sheetStatus" role="status"></p>
+    </div>
+
+    <button id="startBtn" class="block" disabled>Starta quizet</button>
+  </section>
+
+  <!-- FRÅGA (domarens vy) -->
+  <section id="quiz" class="screen">
+    <div class="between">
+      <span class="muted small" id="progress"></span>
+      <button class="ghost" id="endEarlyBtn">Avsluta</button>
+    </div>
+
+    <div class="card">
+      <p class="label" id="category"></p>
+      <p class="question" id="questionText"></p>
+    </div>
+
+    <div class="options" id="options"></div>
+
+    <button class="secondary block" id="revealBtn">Visa rätt svar</button>
+
+    <div class="card">
+      <p class="label">Vem svarade rätt först?</p>
+      <div class="players" id="players"></div>
+      <div class="between" style="margin-top:14px">
+        <button class="ghost" id="undoBtn">Ångra senaste</button>
+        <span class="muted small" id="awardInfo"></span>
+      </div>
+    </div>
+
+    <button id="nextBtn" class="block">Nästa fråga</button>
+
+    <details>
+      <summary>Ställning just nu</summary>
+      <ul class="board" id="liveBoard"></ul>
+    </details>
+  </section>
+
+  <!-- SLUT -->
+  <section id="end" class="screen">
+    <div class="card">
+      <p class="label">Slutresultat</p>
+      <ul class="board" id="finalBoard"></ul>
+    </div>
+    <button id="playAgainBtn" class="block">Spela igen med samma deltagare</button>
+    <button class="secondary block" id="newListBtn">Ny deltagarlista</button>
+  </section>
+</div>
+
+<script>
+/* =========================================================
+   RESERVFRÅGOR: används om ingen Google Sheets-länk är angiven
+   eller om den inte går att läsa.
+   cat = kategori, q = frågan, options = 4 alternativ,
+   a = index för rätt svar (0 = A, 1 = B, 2 = C, 3 = D).
+   ========================================================= */
+const FALLBACK_QUESTIONS = [
+  { cat: "Geografi", q: "Vad är Sveriges huvudstad?", options: ["Göteborg", "Malmö", "Stockholm", "Uppsala"], a: 2 },
+  { cat: "Kemi", q: "Vilket grundämne har kemisk symbol O?", options: ["Guld", "Syre", "Silver", "Järn"], a: 1 },
+  { cat: "Historia", q: "Vilket år började andra världskriget?", options: ["1914", "1939", "1945", "1918"], a: 1 },
+  { cat: "Film", q: "Vilken sydkoreansk film vann Oscar för bästa film 2020?", options: ["Parasite", "Minari", "Burning", "Oldboy"], a: 0 },
+  { cat: "Geografi", q: "Vilket är världens största land till ytan?", options: ["Kina", "USA", "Kanada", "Ryssland"], a: 3 },
+  { cat: "Natur", q: "Hur många ben har en spindel?", options: ["6", "8", "10", "12"], a: 1 },
+  { cat: "Musik", q: "Vilket band gjorde låten Waterloo 1974?", options: ["Roxette", "ABBA", "Ace of Base", "Europe"], a: 1 },
+  { cat: "Sport", q: "Hur många spelare är det i ett fotbollslag på planen?", options: ["9", "10", "11", "12"], a: 2 },
+  { cat: "Kropp", q: "Vilket organ pumpar runt blodet?", options: ["Lungorna", "Hjärtat", "Levern", "Njurarna"], a: 1 },
+  { cat: "Mat", q: "Vilket land kommer sushi ursprungligen ifrån?", options: ["Kina", "Thailand", "Japan", "Sydkorea"], a: 2 },
+  { cat: "Språk", q: "Hur många bokstäver har det svenska alfabetet?", options: ["26", "28", "29", "30"], a: 2 },
+  { cat: "Astronomi", q: "Vilken planet ligger närmast solen?", options: ["Venus", "Merkurius", "Mars", "Jorden"], a: 1 },
+  { cat: "Litteratur", q: "Vem skrev romanen Sagan om Ringen?", options: ["J.K. Rowling", "J.R.R. Tolkien", "George R.R. Martin", "C.S. Lewis"], a: 1 },
+  { cat: "Teknik", q: "Vad står HTML för?", options: ["HyperText Markup Language", "High Tech Modern Language", "Home Tool Markup Language", "Hyperlink and Text Markup Language"], a: 0 },
+  { cat: "Kultur", q: "Hur många tangenter har en vanlig pianoklaviatur?", options: ["66", "76", "88", "96"], a: 2 },
+  { cat: "Historia", q: "Vilken stad var Sveriges huvudstad före Stockholm?", options: ["Uppsala", "Sigtuna", "Visby", "Lund"], a: 1 }
+];
+
+/* =========================================================
+   FRÅGOR FRÅN GOOGLE SHEETS
+   Klistra in din publicerade CSV-länk mellan citattecknen.
+   Lämna tom ("") för att använda reservfrågorna ovan.
+   ========================================================= */
+const SHEET_CSV_URL = "https://raw.githubusercontent.com/pqchallenge/pqchallenge.github.io/refs/heads/main/fragor.csv";
+
+let QUESTIONS = FALLBACK_QUESTIONS;
+
+// Läser CSV-text till en lista med rader (hanterar citattecken och kommatecken i texten)
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') inQuotes = false;
+      else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = "";
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); rows.push(row);
+      row = []; field = "";
+    } else {
+      field += c;
+    }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// Första raden är rubriker och hoppas över. Rader som saknar fråga, svar eller rätt bokstav hoppas över.
+function rowsToQuestions(rows) {
+  const letterIndex = { A: 0, B: 1, C: 2, D: 3 };
+  return rows.slice(1).map(r => ({
+    cat: (r[0] || "").trim(),
+    q: (r[1] || "").trim(),
+    options: [r[2], r[3], r[4], r[5]].map(s => (s || "").trim()),
+    a: letterIndex[(r[6] || "").trim().toUpperCase()]
+  })).filter(x => x.q && x.options.every(o => o) && x.a !== undefined);
+}
+
+// Hämtar frågorna från listan. Kastar fel med ett begripligt meddelande om något går fel.
+async function fetchQuestions() {
+  if (!SHEET_CSV_URL) throw new Error('Ingen länk är inlagd i koden. Reservfrågor används.');
+  const sep = SHEET_CSV_URL.includes('?') ? '&' : '?';
+  const res = await fetch(SHEET_CSV_URL + sep + 't=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('Kunde inte nå listan (fel ' + res.status + '). Kontrollera att bladet är publicerat.');
+  const list = rowsToQuestions(parseCSV(await res.text()));
+  if (list.length === 0) throw new Error('Hittade inga giltiga frågor. Kontrollera kolumnerna i bladet.');
+  return list;
+}
+
+async function loadQuestions() {
+  try {
+    return await fetchQuestions();
+  } catch (err) {
+    console.warn(err);
+    if (SHEET_CSV_URL) alert('Kunde inte läsa frågorna från listan, så reservfrågorna används.');
+    return FALLBACK_QUESTIONS;
+  }
+}
+
+async function testSheet() {
+  const out = $('sheetStatus');
+  out.className = 'status';
+  out.textContent = 'Testar…';
+  try {
+    const list = await fetchQuestions();
+    out.className = 'status ok';
+    out.textContent = 'Hittade ' + list.length + ' frågor. Första: ' + list[0].q;
+  } catch (err) {
+    out.className = 'status bad';
+    out.textContent = err.message;
+  }
+}
+
+// Blandar en kopia av listan (Fisher–Yates)
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const POINTS_FOR_CORRECT = 1;   // endast den som svarar rätt först får poäng
+const MAX_PLAYERS = 30;
+const LETTERS = ["A", "B", "C", "D"];
+
+let players = [];      // { name, score }
+let questionCount = 10;
+let qIndex = 0;
+let awards = [];       // för aktuell fråga: högst en post, den som svarade rätt först
+let factsVisible = false;
+
+const $ = id => document.getElementById(id);
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id));
+  window.scrollTo(0, 0);
+}
+
+/* ---------- INSTÄLLNINGAR ---------- */
+function renderSetup() {
+  const chips = $('chips');
+  chips.innerHTML = '';
+  players.forEach((p, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = p.name;
+    const rm = document.createElement('button');
+    rm.textContent = '×';
+    rm.setAttribute('aria-label', 'Ta bort ' + p.name);
+    rm.onclick = () => { players.splice(i, 1); renderSetup(); };
+    chip.appendChild(rm);
+    chips.appendChild(chip);
+  });
+  $('counter').textContent = players.length + ' av max ' + MAX_PLAYERS + ' deltagare';
+  $('startBtn').disabled = players.length === 0;
+  $('startBtn').textContent = players.length === 0
+    ? 'Lägg till minst en deltagare'
+    : 'Starta quizet · ' + questionCount + ' frågor · ' + players.length + ' deltagare';
+}
+
+function addPlayer() {
+  const input = $('nameInput');
+  const err = $('setupError');
+  const name = input.value.trim();
+  err.textContent = '';
+  if (!name) { err.textContent = 'Skriv ett namn först.'; return; }
+  if (players.some(p => p.name.toLowerCase() === name.toLowerCase())) { err.textContent = 'Det finns redan en deltagare med det namnet.'; return; }
+  if (players.length >= MAX_PLAYERS) { err.textContent = 'Max ' + MAX_PLAYERS + ' deltagare.'; return; }
+  players.push({ name, score: 0 });
+  input.value = '';
+  renderSetup();
+  input.focus();
+}
+
+function setQuestionCount(n) {
+  questionCount = n;
+  document.querySelectorAll('#countSeg button').forEach(b => {
+    b.setAttribute('aria-pressed', String(Number(b.dataset.n) === n));
+  });
+  renderSetup();
+}
+
+$('addBtn').onclick = addPlayer;
+$('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') addPlayer(); });
+document.querySelectorAll('#countSeg button').forEach(b => {
+  b.onclick = () => setQuestionCount(Number(b.dataset.n));
+});
+$('testBtn').onclick = testSheet;
+
+/* ---------- SPELET ---------- */
+async function startGame() {
+  const btn = $('startBtn');
+  btn.disabled = true;
+  btn.textContent = 'Hämtar frågor…';
+  const source = await loadQuestions();
+  const n = Math.min(questionCount, source.length);
+  QUESTIONS = shuffle(source).slice(0, n);
+  players.forEach(p => p.score = 0);
+  qIndex = 0;
+  btn.disabled = false;
+  renderSetup();
+  showQuestion();
+}
+
+function showQuestion() {
+  const q = QUESTIONS[qIndex];
+  awards = [];
+  factsVisible = false;
+
+  $('progress').textContent = 'Fråga ' + (qIndex + 1) + ' av ' + QUESTIONS.length;
+  $('category').textContent = q.cat;
+  $('questionText').textContent = q.q;
+  $('nextBtn').textContent = qIndex + 1 < QUESTIONS.length ? 'Nästa fråga' : 'Visa slutresultat';
+  $('revealBtn').textContent = 'Visa rätt svar';
+
+  renderOptions();
+  renderPlayers();
+  renderLiveBoard();
+  showScreen('quiz');
+}
+
+function renderOptions() {
+  const q = QUESTIONS[qIndex];
+  const box = $('options');
+  box.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const div = document.createElement('div');
+    div.className = 'option' + (factsVisible && i === q.a ? ' correct' : '');
+    const letter = document.createElement('span');
+    letter.className = 'letter';
+    letter.textContent = LETTERS[i];
+    const text = document.createElement('span');
+    text.textContent = opt;
+    div.append(letter, text);
+    box.appendChild(div);
+  });
+}
+
+function toggleReveal() {
+  factsVisible = !factsVisible;
+  $('revealBtn').textContent = factsVisible ? 'Dölj rätt svar' : 'Visa rätt svar';
+  renderOptions();
+}
+
+function renderPlayers() {
+  const grid = $('players');
+  grid.innerHTML = '';
+  const locked = awards.length > 0;
+  players.forEach((p, i) => {
+    const won = locked && awards[0].p === i;
+    const btn = document.createElement('button');
+    btn.className = 'player' + (won ? ' won' : '');
+    btn.disabled = locked;
+
+    const name = document.createElement('span');
+    name.textContent = p.name;
+    const place = document.createElement('span');
+    place.className = 'place';
+    if (won) place.textContent = 'Rätt först · +' + POINTS_FOR_CORRECT + ' p';
+    const total = document.createElement('span');
+    total.className = 'total';
+    total.textContent = p.score + ' p totalt';
+
+    btn.append(name, place, total);
+    btn.onclick = () => award(i);
+    grid.appendChild(btn);
+  });
+  $('awardInfo').textContent = locked
+    ? 'Poäng till ' + players[awards[0].p].name
+    : 'Ingen har svarat rätt än';
+  $('undoBtn').disabled = !locked;
+}
+
+// Den första som klickas får poängen. Övriga knappar låses tills man ångrar.
+function award(playerIndex) {
+  if (awards.length > 0) return;
+  awards.push({ p: playerIndex, pts: POINTS_FOR_CORRECT });
+  players[playerIndex].score += POINTS_FOR_CORRECT;
+  renderPlayers();
+  renderLiveBoard();
+}
+
+function undo() {
+  const last = awards.pop();
+  if (!last) return;
+  players[last.p].score -= last.pts;
+  renderPlayers();
+  renderLiveBoard();
+}
+
+function sortedPlayers() {
+  return players.slice().sort((a, b) => b.score - a.score);
+}
+
+function renderLiveBoard() {
+  const list = $('liveBoard');
+  list.innerHTML = '';
+  sortedPlayers().forEach(p => {
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.textContent = p.name;
+    const s = document.createElement('span');
+    s.className = 'pts';
+    s.textContent = p.score + ' p';
+    li.append(n, s);
+    list.appendChild(li);
+  });
+}
+
+function nextQuestion() {
+  qIndex++;
+  if (qIndex < QUESTIONS.length) showQuestion();
+  else showEnd();
+}
+
+function showEnd() {
+  const list = $('finalBoard');
+  list.innerHTML = '';
+  const medals = ['🥇', '🥈', '🥉'];
+  sortedPlayers().forEach((p, i) => {
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.textContent = (medals[i] ? medals[i] + ' ' : (i + 1) + '. ') + p.name;
+    const s = document.createElement('span');
+    s.className = 'pts';
+    s.textContent = p.score + ' p';
+    li.append(n, s);
+    list.appendChild(li);
+  });
+  const items = list.querySelectorAll('li');
+  const ranked = sortedPlayers();
+  if (ranked.length > 1) {
+    const bottom = ranked[ranked.length - 1].score;
+    const top = ranked[0].score;
+    ranked.forEach((p, i) => {
+      if (p.score === bottom && bottom !== top) {
+        const li = items[i];
+        li.classList.add('loser');
+        const badge = document.createElement('span');
+        badge.className = 'loser-badge';
+        badge.textContent = 'Betalar nästa runda';
+        li.querySelector('span').appendChild(badge);
+      }
+    });
+  }
+  showScreen('end');
+}
+
+$('startBtn').onclick = startGame;
+$('revealBtn').onclick = toggleReveal;
+$('undoBtn').onclick = undo;
+$('nextBtn').onclick = nextQuestion;
+$('endEarlyBtn').onclick = () => { if (confirm('Avsluta quizet nu?')) showEnd(); };
+$('playAgainBtn').onclick = startGame;
+$('newListBtn').onclick = () => {
+  players = [];
+  renderSetup();
+  showScreen('setup');
+};
+
+renderSetup();
+</script>
+</body>
+</html>
